@@ -99,6 +99,7 @@ void* merge_caller(void* t) {
     } else {
         high = low + size-1;
     }
+    //printf("MERGING THREAD %d: from %d to %d\n", thread_index, low,high);
     merge_sort(low, high);
     // for(int i = low; low<high; low++) {
     //     for(int j = 0; j<4; j++) {
@@ -110,17 +111,17 @@ void* merge_caller(void* t) {
     //     printf("\n");
     // }
 
-    printf("THREAD %d\n", thread_index);
-    int prev = -1215752192;
-    for(int i = low; i<high; i++) {
-        //printf("%d\n",records[i].key[0]);
-        if(records[i].key[0]<prev) {
-            printf("BAD DIDNT WORK\n");
-            printf("RECORD: %d\n", records[i].key[0]);
-            printf("PREVIOUS: %d\n", prev);
-        }
-        prev = records[i].key[0];
-    }
+    // printf("THREAD %d\n", thread_index);
+    // int prev = -1215752192;
+    // for(int i = low; i<high; i++) {
+    //     //printf("%d\n",records[i].key[0]);
+    //     if(records[i].key[0]<prev) {
+    //         printf("BAD DIDNT WORK\n");
+    //         printf("RECORD: %d\n", records[i].key[0]);
+    //         printf("PREVIOUS: %d\n", prev);
+    //     }
+    //     prev = records[i].key[0];
+    // }
     return 0;
 }
 
@@ -163,7 +164,7 @@ int main(int argc, char** argv) {
     // }
 
     pthread_t threads[num_threads];
-    printf("NUMTHREADS: %d\n", num_threads);
+    //printf("NUMTHREADS: %d\n", num_threads);
     int* indexes = malloc(num_threads * sizeof(int));
     // sort     
     for(long i = 0; i<num_threads; i++) {
@@ -183,18 +184,41 @@ int main(int argc, char** argv) {
     // }
 
     // remerge all of them
-    // int num_sections = num_threads;
-    // int i = 0;
-    // while(num_sections > 1) {
-    //     while(i+1 < num_sections) {
+    int num_sections = num_threads;
+    int num_merges = num_sections/2;
+    int size = num_records/num_sections*2;
+    while(num_merges > 0) {
+        int sections = num_sections;
+        for(int i = 0; i<num_merges; i++) {
+            //int size = num_records/num_merges;
+            int low = i * size;
+            int high;
+            if(num_sections %2 == 0 && i==num_merges-1) {  // i == num_merges-1)
+                high = num_records - 1;
+            } else {
+                high = low + size - 1;
+            }
+            int mid = low + size/2 - 1;
+            merge(low, mid, high);
+            // printf("MERGING %d to %d\n", low, high);
+            // printf("Num_sections: %d, Num_merges: %d, i = %d, size = %d\n", num_sections, num_merges,i,size);
+            sections--;
+        }
+        size *= 2;
+        num_sections = sections;
+        num_merges = num_sections/2;
+    }
 
+    // int prev = -1215752192;
+    // for(int i = 0; i<num_records; i++) {
+    //     //printf("%d\n",records[i].key[0]);
+    //     if(records[i].key[0]<prev) {
+    //         printf("BAD DIDNT WORK\n");
+    //         printf("RECORD: %d\n", records[i].key[0]);
+    //         printf("PREVIOUS: %d\n", prev);
     //     }
-        
+    //     prev = records[i].key[0];
     // }
-
-
-
-
 
     free(indexes);
     
