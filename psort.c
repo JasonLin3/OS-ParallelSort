@@ -31,26 +31,36 @@ int main(int argc, char** argv) {
 
     filelen = statbuf.st_size;
 
-    int entry = filelen % 100;
-
-    // printf("%ld\n", entry * sizeof(struct rec));
+    int num_records = filelen / 100;
 
     //converted to char pointer
     //made map private to avoid modifications from other thread.
     char *ptr = (char *) mmap(0, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
 
     //create an array of structs
-    struct rec *records = malloc(entry * sizeof(struct rec));
+    struct rec *records = malloc(num_records * sizeof(struct rec));
 
     int j = 0;
 
     //copy key and value into struct
     for(int i = 0; i<statbuf.st_size; i = i + 100) {
-        memcpy(records[j].key, ptr + i, 4);
-        memcpy(records[j].value, ptr + i, 96);
+        memcpy(records[j].key, ptr+i, 4);
+        memcpy(records[j].value, ptr+i+4, 96);
         j++;
         // printf("%s\n", ptr + i);
+        // printf("%d\n", records[j].key[0]);
     }
+
+    //debug print
+    // for(int i = 0; i<num_records; i++) {
+    //     for(int j = 0; j<4; j++) {
+    //         printf("%d", records[i].key[j]);
+    //     }
+    //     for(int j= 4; j<100; j++) {
+    //         printf("%d", records[i].value[j]);
+    //     }
+    //     printf("\n");
+    // }
 
     close(fd);
 
