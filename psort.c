@@ -30,26 +30,96 @@ int num_records;
 struct rec *records;
 int curr_partition;
 
-// int merge() {
+int merge(int left, int mid, int right) {
+    // get size of each half
+    int size_left = mid - left + 1;
+    int size_right = right-mid;
 
-// }
+    // make temporary arrays
+    struct rec* left_array = malloc(size_left * sizeof(struct rec));
+    struct rec* right_array = malloc(size_right * sizeof(struct rec));
+    for(int i = 0; i<size_left; i++) {
+        left_array[i] = records[left+i];
+    }
+    for(int i = 0; i<size_right; i++) {
+        right_array[i] = records[mid+i+1];
+    }
 
-// int merge_sort(list, start, end) {
-//     if(start < end) {
-//         int mid = 1 + (end-1) /2;
+    // merge
+    int l = 0;
+    int r = 0;
+    int i = left;
+    while(l<size_left && r< size_right) {
+        if(left_array[l].key[0] < right_array[r].key[0]) {
+            records[i] = left_array[l];
+            l++;
+        } else {
+            records[i] = right_array[r];
+            r++;
+        }
+        i++;
+    }
+    // add the rest
+    while(l<size_left) {
+        records[i] = left_array[l];
+        l++;
+        i++;
+    }
+    while(r<size_right) {
+        records[i] = right_array[r];
+        r++;
+        i++;
+    }
+    free(left_array);
+    free(right_array);
+    return 0;
+}
 
-//         mergeSort(arr, 1, m);
-//         mergeSort(arr, m + 1, r);
+int merge_sort(int left, int right) {
+    if(left<right) {
+        int mid = (left+right)/2;
 
-//         merge();
-//     }
-// }
+        merge_sort(left, mid);
+        merge_sort(mid + 1, right);
+
+        merge(left, mid, right);
+    }
+    return 0;
+}
 
 void* merge_caller(void* t) {
     // int curr_part = curr_partition++;
-    int* thread_index = (int*) t;
-    printf("HELLO FROM  %d\n", *thread_index);
-    
+    int thread_index = *(int*) t;
+    // get low and high
+    int size = num_records/num_threads;
+    int low = thread_index * size;
+    int high;
+    if(thread_index == num_threads-1) {
+        high = num_records - 1;
+    } else {
+        high = low + size;
+    }
+    merge_sort(low, high);
+    // for(int i = low; low<high; low++) {
+    //     for(int j = 0; j<4; j++) {
+    //         printf("%d", records[i].key[j]);
+    //     }
+    //     for(int j= 4; j<100; j++) {
+    //         printf("%d", records[i].value[j]);
+    //     }
+    //     printf("\n");
+    // }
+
+    // printf("THREAD %d\n", thread_index);
+    // int prev = -1215752192;
+    // for(int i = low; i<high; i++) {
+    //     printf("%d\n",records[i].key[0]);
+    //     if(records[i].key[0]<prev) {
+    //         printf("BAD DIDNT WORK\n");
+    //     }
+    //     prev = records[i].key[0];
+    // }
+    return 0;
 }
 
 int main(int argc, char** argv) {
@@ -85,6 +155,9 @@ int main(int argc, char** argv) {
         memcpy(records[j].value, ptr+i+4, 96);
         j++;
     }
+    for(int i = 0; i<num_records; i++) {
+        printf("%d\n",records[i].key[0]);
+    }
 
     pthread_t threads[num_threads];
     printf("NUMTHREADS: %d\n", num_threads);
@@ -97,6 +170,28 @@ int main(int argc, char** argv) {
     for(int i = 0; i<num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
+    // int prev = -100000000000;
+    // for(int i = 0; i<num_records; i++) {
+    //     printf("%d\n",records[i].key[0]);
+    //     if(records[i].key[0]<prev) {
+    //         printf("BAD DIDNT WORK\n");
+    //     }
+    //     prev = records[i].key[0];
+    // }
+
+    // remerge all of them
+    // int num_sections = num_threads;
+    // int i = 0;
+    // while(num_sections > 1) {
+    //     while(i+1 < num_sections) {
+
+    //     }
+        
+    // }
+
+
+
+
 
     free(indexes);
     
