@@ -223,8 +223,18 @@ int main(int argc, char** argv) {
     free(indexes);
     
     // send to output
-    
-    
+    fd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC); 
+
+    for(int i = 0; i< num_records; i++) {
+        int record[25];
+        record[0] = records[i].key[0];
+        for(int j = 0; j <24; j++) {
+            record[j+1] = records[i].value[j];
+        }
+        write(fd, record, 100);
+    }
+    fsync(fd);
+    close(fd);
     
     return 0;
 }
