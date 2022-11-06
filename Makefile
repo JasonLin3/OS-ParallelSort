@@ -1,2 +1,2 @@
 run:
-	gcc psort.c -Wall -pthread -O -o psort
+	gcc psort.c -Wall -pthread -O2 -o psort

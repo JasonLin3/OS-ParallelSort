@@ -8,9 +8,11 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+int debug = 0;
+
 struct rec {
     int key;
-    int value[24]; // 96 bytes
+    char value[96];
 };
 
 //debug print
@@ -35,6 +37,10 @@ int merge(int left, int mid, int right) {
     int size_left = mid - left + 1;
     int size_right = right-mid;
 
+    if (debug) {
+        printf("IN MERGE\n");
+    }
+
     // make temporary arrays
     // struct rec** left_array = malloc(size_left * sizeof(struct rec *));
     // for (int n1 = 0; n1 < size_left; n1++) {
@@ -45,14 +51,20 @@ int merge(int left, int mid, int right) {
     // for (int n2 = 0; n2 < size_right; n2++) {
     //     right_array[n2] = malloc(sizeof(struct rec))
     // }
-    struct rec *left_array[size_left];
-    struct rec *right_array[size_right];
+    //struct rec *left_array[size_left];
+    //struct rec *right_array[size_right]; 
+    struct rec **left_array = malloc(size_left * sizeof(struct rec*));
+    struct rec **right_array = malloc(size_left * sizeof(struct rec*));
 
     for(int i = 0; i<size_left; i++) {
         left_array[i] = records[left+i];
+        // printf("Left array[%d] set to %d\n", i, left_array[i]);
     }
     for(int i = 0; i<size_right; i++) {
         right_array[i] = records[mid+i+1];
+    }
+    if (debug) {
+        printf("IN HERE 5\n");
     }
 
     // merge
@@ -60,15 +72,27 @@ int merge(int left, int mid, int right) {
     int r = 0;
     int i = left;
     while(l<size_left && r< size_right) {
+        if (debug) {
+            // printf("IN HERE 7\n");
+            printf("L: %d, R: %d, I: %d\n",l,r,i);
+        }
+        
         if(left_array[l]->key < right_array[r]->key) {
+            // printf("HERE HERE HERE\n");
             records[i] = left_array[l];
             l++;
         } else {
+            // printf("HERE HERE HERE HERE\n");
             records[i] = right_array[r];
             r++;
         }
         i++;
     }
+
+    if (debug) {
+        printf("IN HERE 6\n");
+    }
+
     // add the rest
     while(l<size_left) {
         records[i] = left_array[l];
@@ -86,8 +110,12 @@ int merge(int left, int mid, int right) {
 }
 
 int merge_sort(int left, int right) {
+    // printf("%d%d\n", left, right);
     if(left<right) {
         int mid = left + (right-left)/2;
+        if (debug) {
+            printf("IN MERGE SORT\n");
+        }
 
         merge_sort(left, mid);
         merge_sort(mid + 1, right);
@@ -100,16 +128,25 @@ int merge_sort(int left, int right) {
 void* merge_caller(void* t) {
     // int curr_part = curr_partition++;
     int thread_index = (long) t;
+    if (debug) {
+        printf("HERE 1\n");
+    }
     // get low and high
     int size = num_records/num_threads;
     int low = thread_index * size;
     int high;
+    if (debug) {
+        printf("HERE 2\n");
+    }
     if(thread_index == num_threads-1) {
         high = num_records - 1;
     } else {
         high = low + size-1;
     }
     //printf("MERGING THREAD %d: from %d to %d\n", thread_index, low,high);
+    if (debug) {
+        printf("HERE 3\n");
+    }
     merge_sort(low, high);
     // for(int i = low; low<high; low++) {
     //     for(int j = 0; j<4; j++) {
@@ -137,18 +174,24 @@ void* merge_caller(void* t) {
 
 int main(int argc, char** argv) {
     // parse input - use threading
-    // FILE *fp;
+    FILE *fp;
     //char buffer[100];
     int filelen, fd, err;     
     struct stat statbuf;
-     num_threads = get_nprocs();
+    // num_threads = get_nprocs();
+    num_threads = 1;
     // num_threads = get_nprocs_conf();
 
     // printf("HERE");
     
     // get file descriptor and size
-    fd = open(argv[1], O_RDWR); 
-    err = stat(argv[1], &statbuf);
+    fp = fopen(argv[1], "r"); 
+    if (fp == NULL) {
+        fprintf(stderr, "An error has occurred\n");
+        exit(0);
+    }
+    fd = fileno(fp);
+    err = fstat(fd, &statbuf);
     if (err < 0) {
         fprintf(stderr, "An error has occurred\n");
         exit(0);
@@ -156,7 +199,7 @@ int main(int argc, char** argv) {
     filelen = (int)statbuf.st_size;
     num_records = filelen / 100;
 
-    printf("HERE\n");
+    // printf("%d\n", filelen);
 
     if (filelen <= 0 || filelen % 100 != 0) {
         fprintf(stderr, "An error has occurred\n");
@@ -168,28 +211,47 @@ int main(int argc, char** argv) {
     char *ptr = (char *) mmap(0, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
     close(fd);
 
+    // SOMETHING WRONG HERE!
+    if (ptr == MAP_FAILED) {
+        printf("MMAP FAILED!\n");
+        return -1;
+    }
+
     //create an array of structs
     records = malloc(num_records * sizeof(struct rec*));
 
     for (int x = 0; x < num_records; x++) {
         records[x] = malloc(sizeof(struct rec));
     }
+    //Record = pointer to a pointer of a record
+    //record[0] = pointer to a record (struct)
+    //
 
-    int j = 0; // index of record
     //copy key and value into struct
     for(int i = 0; i<filelen; i = i + 100) {
-        printf("%d\n", i);
-        memcpy((void*)&records[j]->key, ptr+i, 4);
-        memcpy((void*)&records[j]->value, ptr+i+4, 96);
-        j++;
+        if (debug) {
+            printf("%d\n", i);
+        }
+        memcpy((void*)records[i/100], ptr+i, 100);
+        if (debug) {
+            printf("COPIED EVERYTHING\n");
+        }
     }
+    // printf("records[0] is set to: %d\n", records[0]->key);
     // for(int i = 0; i<num_records; i++) {
     //     printf("%d\n",records[i].key[0]);
     // }
 
+    if (debug) {
+        printf("HERE NOW\n");
+    }
+
     pthread_t threads[num_threads];
     //printf("NUMTHREADS: %d\n", num_threads);
     int* indexes = malloc(num_threads * sizeof(int));
+    if (debug) {
+        printf("CREATED INDEXES\n");
+    }
     // sort     
     for(long i = 0; i<num_threads; i++) {
         indexes[i] = i;
@@ -197,6 +259,10 @@ int main(int argc, char** argv) {
     }
     for(int i = 0; i<num_threads; i++) {
         pthread_join(threads[i], NULL);
+    }
+
+    if (debug) {
+        printf("CREATED THREADS\n");
     }
     // int prev = -100000000000;
     // for(int i = 0; i<num_records; i++) {
@@ -253,14 +319,14 @@ int main(int argc, char** argv) {
 
     // fp = fopen(argv[2], "w");
 
-    printf("HERE 3");
+    if (debug) printf("Opening file\n");
 
-    int fdout = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 066); 
-    if (fdout == -1) {
-        printf("IN HERE 1\n");
+    FILE *fdout = fopen(argv[2], "w");
+    if (fdout == NULL) {
         fprintf(stderr, "An error has occurred\n");
         exit(0);
     }
+    if (debug) printf("File open\n");
 
     for(int i = 0; i< num_records; i++) {
         //int record[25];
@@ -268,17 +334,13 @@ int main(int argc, char** argv) {
         // for(int j = 0; j <24; j++) {
         //     record[j+1] = records[i]->value[j];
         // }
-       int rc = write(fdout, &records[i], 100);
-       if (rc != 100) {
-            printf("HERE IN\n");
-            fprintf(stderr, "An error has occurred\n");
-            exit(0);
-       }
+       fwrite(records[i],sizeof(struct rec),1,fdout);
+    //    if (rc != 100) {
+    //         fprintf(stderr, "An error has occurred\n");
+    //         exit(0);
+    //    }
     }
-    fsync(fdout);
-    close(fdout);
-
-    printf("HERE 4");
+    fclose(fdout);
     
     return 0;
 }
