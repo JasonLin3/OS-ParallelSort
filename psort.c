@@ -8,11 +8,22 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-int debug = 0;
+int debug = 2;
 
 struct rec {
     int key;
     char value[96];
+};
+
+struct caller {
+    int index;
+};
+
+struct targs {
+    int i; 
+    int size;
+    int sections;
+    int merges;
 };
 
 //debug print
@@ -29,11 +40,12 @@ struct rec {
 // get number of threads
 int num_threads;
 int num_records;
-struct rec **records;
+struct rec *records;
 int curr_partition;
 
 int merge(int left, int mid, int right) {
     // get size of each half
+    if (debug)printf("left: %d, mid: %d, right: %d\n", left,mid,right);
     int size_left = mid - left + 1;
     int size_right = right-mid;
 
@@ -53,15 +65,19 @@ int merge(int left, int mid, int right) {
     // }
     //struct rec *left_array[size_left];
     //struct rec *right_array[size_right]; 
-    struct rec **left_array = malloc(size_left * sizeof(struct rec*));
-    struct rec **right_array = malloc(size_left * sizeof(struct rec*));
+    struct rec *left_array = malloc(size_left * sizeof(struct rec));
+    struct rec *right_array = malloc(size_right * sizeof(struct rec));
 
     for(int i = 0; i<size_left; i++) {
+        if (debug == 2) printf("Before set left\n");
         left_array[i] = records[left+i];
+         if (debug == 2) printf("After set left\n");
         // printf("Left array[%d] set to %d\n", i, left_array[i]);
     }
     for(int i = 0; i<size_right; i++) {
+         if (debug == 2) printf("Before set right (%d,%d)\n",i, mid+i+1);
         right_array[i] = records[mid+i+1];
+         if (debug == 2) printf("After set right\n");
     }
     if (debug) {
         printf("IN HERE 5\n");
@@ -71,13 +87,13 @@ int merge(int left, int mid, int right) {
     int l = 0;
     int r = 0;
     int i = left;
-    while(l<size_left && r< size_right) {
+    while(l<size_left && r < size_right) {
         if (debug) {
             // printf("IN HERE 7\n");
             printf("L: %d, R: %d, I: %d\n",l,r,i);
         }
         
-        if(left_array[l]->key < right_array[r]->key) {
+        if(left_array[l].key < right_array[r].key) {
             // printf("HERE HERE HERE\n");
             records[i] = left_array[l];
             l++;
@@ -94,16 +110,26 @@ int merge(int left, int mid, int right) {
     }
 
     // add the rest
+    if (debug) printf("l: %d, size_left: %d, r: %d, size_right: %d\n",l,size_left,r,size_right);
     while(l<size_left) {
+        if (debug == 2) printf("Before set records[%d]\n", i);
+
         records[i] = left_array[l];
+        if (debug == 2) printf("After set records[%d]\n", i);
+        
         l++;
         i++;
     }
     while(r<size_right) {
+        if (debug == 2) printf("Before set records[%d]\n", i);
+        
         records[i] = right_array[r];
+        if (debug == 2) printf("After set records[%d]\n", i);
+        
         r++;
         i++;
     }
+    if (debug) printf("Returned\n");
     // free(left_array);
     // free(right_array);
     return 0;
@@ -111,6 +137,7 @@ int merge(int left, int mid, int right) {
 
 int merge_sort(int left, int right) {
     // printf("%d%d\n", left, right);
+    if (debug) printf("Merge_sort\tleft: %d, right: %d\n",left,right);
     if(left<right) {
         int mid = left + (right-left)/2;
         if (debug) {
@@ -121,6 +148,8 @@ int merge_sort(int left, int right) {
         merge_sort(mid + 1, right);
 
         merge(left, mid, right);
+
+        if (debug) printf("Finished merge\n");
     }
     return 0;
 }
@@ -138,15 +167,20 @@ void* merge_caller(void* t) {
     if (debug) {
         printf("HERE 2\n");
     }
+
+    if (debug) printf("num_threads = %d\n", num_threads);
     if(thread_index == num_threads-1) {
         high = num_records - 1;
     } else {
         high = low + size-1;
     }
+
     //printf("MERGING THREAD %d: from %d to %d\n", thread_index, low,high);
     if (debug) {
         printf("HERE 3\n");
     }
+    if (debug)
+    printf("Calling merge sort: (%d,%d)\n",low,high);
     merge_sort(low, high);
     // for(int i = low; low<high; low++) {
     //     for(int j = 0; j<4; j++) {
@@ -172,6 +206,34 @@ void* merge_caller(void* t) {
     return 0;
 }
 
+void* parallel_merge(void * args) {
+    // int i =  (args + 0);
+    // int s =  (args + 1);
+    // int sections =  (args + 2);
+    // int merges = (args + 3);
+    struct targs *curr = (struct targs*) args;
+    int i = curr->i;
+    int s = curr->size;
+    int sections = curr->sections;
+    int merges = curr->merges;
+
+    if (debug == -1) printf("i: %d, size: %d, sections: %d, merges: %d\n", i, s, sections, merges);
+    
+    int low = i * s;
+    int high;
+    if(sections % 2 == 0 && i==merges-1) {
+        high = num_records - 1;
+    } else {
+        high = low + s - 1;
+    }
+    int mid = low + s/2 - 1;
+    merge(low, mid, high);
+    if(debug)
+     printf("MERGED %d to %d\n", low, high);
+
+    return 0;
+}
+
 int main(int argc, char** argv) {
     // parse input - use threading
     FILE *fp;
@@ -179,8 +241,8 @@ int main(int argc, char** argv) {
     int filelen, fd, err;     
     struct stat statbuf;
     // num_threads = get_nprocs();
-    num_threads = 1;
-    // num_threads = get_nprocs_conf();
+    // num_threads = 1;
+    num_threads = 5;
 
     // printf("HERE");
     
@@ -206,6 +268,10 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
+    if (num_records < 100) {
+        num_threads = 1;
+    }
+
     //converted to char pointer
     //made map private to avoid modifications from other thread.
     char *ptr = (char *) mmap(0, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0 );
@@ -218,21 +284,26 @@ int main(int argc, char** argv) {
     }
 
     //create an array of structs
-    records = malloc(num_records * sizeof(struct rec*));
-
-    for (int x = 0; x < num_records; x++) {
-        records[x] = malloc(sizeof(struct rec));
+    records = malloc(num_records * sizeof(struct rec));
+    for (int i = 0; i < num_records; i++) {
+        if (debug)
+        printf("record %d, %d\n", i, records[i].key);
     }
+
+    // for (int x = 0; x < num_records; x++) {
+    //     records[x] = malloc(sizeof(struct rec));
+    // }
     //Record = pointer to a pointer of a record
     //record[0] = pointer to a record (struct)
-    //
 
     //copy key and value into struct
+    // memcpy(&records, ptr, num_records * sizeof(struct rec));
+    // fread(records, statbuf.st_size, 1, fp);
     for(int i = 0; i<filelen; i = i + 100) {
         if (debug) {
             printf("%d\n", i);
         }
-        memcpy((void*)records[i/100], ptr+i, 100);
+        memcpy(&records[(int) i/100], ptr+i, 100);
         if (debug) {
             printf("COPIED EVERYTHING\n");
         }
@@ -255,6 +326,7 @@ int main(int argc, char** argv) {
     // sort     
     for(long i = 0; i<num_threads; i++) {
         indexes[i] = i;
+        if (debug) printf("Current thread: %ld\n", i);
         pthread_create(&threads[i], NULL, merge_caller, (void*)i);
     }
     for(int i = 0; i<num_threads; i++) {
@@ -275,26 +347,37 @@ int main(int argc, char** argv) {
 
     // printf("HERE 2");
 
+    if (debug) printf("Finished sorting\n");
     // remerge all of them
     int num_sections = num_threads;
     int num_merges = num_sections/2;
     int size = num_records/num_sections*2;
     while(num_merges > 0) {
         int sections = num_sections;
+        pthread_t thread_pool[num_merges];
+        struct targs data[num_merges];
         for(int i = 0; i<num_merges; i++) {
             //int size = num_records/num_merges;
-            int low = i * size;
-            int high;
-            if(num_sections %2 == 0 && i==num_merges-1) {  // i == num_merges-1)
-                high = num_records - 1;
-            } else {
-                high = low + size - 1;
-            }
-            int mid = low + size/2 - 1;
-            merge(low, mid, high);
-            // printf("MERGING %d to %d\n", low, high);
-            // printf("Num_sections: %d, Num_merges: %d, i = %d, size = %d\n", num_sections, num_merges,i,size);
+            data[i].i = i;
+            data[i].size = size;
+            data[i].sections = sections;
+            data[i].merges = num_merges;
+            
+            // args[0] = i;
+            // args[1] = size;
+            // args[2] = num_sections;
+            // args[3] = num_merges;
+            if (debug) printf("Creating thread (%d,%d,%d,%d)\n",i, size,num_sections,num_merges);
+            pthread_create(&thread_pool[i], NULL, parallel_merge, (void *)&data[i]);
+            // free(args);
+            
             sections--;
+        }
+        for(int i = 0; i<num_merges; i++) {
+            if(debug)printf("Joined thread %d\n",i);
+            //if(debug) printf("Thread: %d\n", thread_pool[i]);
+            pthread_join(thread_pool[i], NULL);
+            //if(debug) printf("Finished thread %d\n",i);
         }
         size *= 2;
         num_sections = sections;
@@ -327,14 +410,20 @@ int main(int argc, char** argv) {
         exit(0);
     }
     if (debug) printf("File open\n");
-
+    int last = 0;
     for(int i = 0; i< num_records; i++) {
         //int record[25];
         //record[0] = records[i]->key;
         // for(int j = 0; j <24; j++) {
         //     record[j+1] = records[i]->value[j];
         // }
-       fwrite(records[i],sizeof(struct rec),1,fdout);
+       fwrite(&records[i],sizeof(struct rec),1,fdout);
+       if(debug == 2) printf("Writing: %d",records[i].key);
+       if (debug == 2) {
+        if (last > records[i].key) printf(" INCORRECT!");
+        last = records[i].key;
+        printf("\n");
+       }
     //    if (rc != 100) {
     //         fprintf(stderr, "An error has occurred\n");
     //         exit(0);
