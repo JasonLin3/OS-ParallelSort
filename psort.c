@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-int debug = 2;
+int debug = 0;
 
 struct rec {
     int key;
@@ -130,8 +130,8 @@ int merge(int left, int mid, int right) {
         i++;
     }
     if (debug) printf("Returned\n");
-    // free(left_array);
-    // free(right_array);
+    free(left_array);
+    free(right_array);
     return 0;
 }
 
@@ -179,8 +179,8 @@ void* merge_caller(void* t) {
     if (debug) {
         printf("HERE 3\n");
     }
-    if (debug)
-    printf("Calling merge sort: (%d,%d)\n",low,high);
+    //if (debug)
+    // printf("Calling merge sort: (%d,%d)\n",low,high);
     merge_sort(low, high);
     // for(int i = low; low<high; low++) {
     //     for(int j = 0; j<4; j++) {
@@ -228,9 +228,18 @@ void* parallel_merge(void * args) {
     }
     int mid = low + s/2 - 1;
     merge(low, mid, high);
-    if(debug)
-     printf("MERGED %d to %d\n", low, high);
-
+    // if(debug)
+    // printf("MERGED %d to %d to i: %d to merges: %d to sections %d\n", low, high, i, merges, sections);
+    // int prev = -1215752192;
+    // for(int i = low; i<high; i++) {
+    //     //printf("%d\n",records[i].key[0]);
+    //     if(records[i].key<prev) {
+    //         printf("BAD DIDNT WORK IN PARALLEL MERGE\n");
+    //         printf("RECORD: %d, indexed %d\n", records[i].key,i);
+    //         printf("PREVIOUS: %d\n", prev);
+    //     }
+    //     prev = records[i].key;
+    // }
     return 0;
 }
 
@@ -240,9 +249,10 @@ int main(int argc, char** argv) {
     //char buffer[100];
     int filelen, fd, err;     
     struct stat statbuf;
-    // num_threads = get_nprocs();
+    num_threads = get_nprocs();
+    //printf("NUM_THREADS %d\n", num_threads);
     // num_threads = 1;
-    num_threads = 5;
+    // num_threads = 5;
 
     // printf("HERE");
     
@@ -360,7 +370,7 @@ int main(int argc, char** argv) {
             //int size = num_records/num_merges;
             data[i].i = i;
             data[i].size = size;
-            data[i].sections = sections;
+            data[i].sections = num_sections;
             data[i].merges = num_merges;
             
             // args[0] = i;
@@ -387,12 +397,12 @@ int main(int argc, char** argv) {
     // int prev = -1215752192;
     // for(int i = 0; i<num_records; i++) {
     //     //printf("%d\n",records[i].key[0]);
-    //     if(records[i].key[0]<prev) {
+    //     if(records[i].key<prev) {
     //         printf("BAD DIDNT WORK\n");
-    //         printf("RECORD: %d\n", records[i].key[0]);
+    //         printf("RECORD: %d, indexed %d\n", records[i].key,i);
     //         printf("PREVIOUS: %d\n", prev);
     //     }
-    //     prev = records[i].key[0];
+    //     prev = records[i].key;
     // }
 
     free(indexes);
